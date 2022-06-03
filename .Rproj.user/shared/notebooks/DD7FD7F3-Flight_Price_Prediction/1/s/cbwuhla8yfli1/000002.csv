@@ -1,0 +1,8 @@
+"0","```r
+airline         <-as.data.frame(dummy.code(flightdata$airline))
+source_city     <-as.data.frame(dummy.code(flightdata$source_city))
+departure_time  <-as.data.frame(dummy.code(flightdata$departure_time))
+stops           <-as.data.frame(dummy.code(flightdata$stops))
+arrival_time    <-as.data.frame(dummy.code(flightdata$arrival_time))
+destination_city<-as.data.frame(dummy.code(flightdata$destination_city))
+```"

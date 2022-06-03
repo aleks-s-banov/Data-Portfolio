@@ -1,0 +1,6 @@
+"0","```r
+knnPredict <- predict(pred_caret, newdata = class_pred_test) 
+outcome_test$outcome_test<- factor(outcome_test$outcome_test)
+
+confusionMatrix(knnPredict, outcome_test$outcome_test)
+```"

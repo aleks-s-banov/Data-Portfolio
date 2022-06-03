@@ -1,0 +1,432 @@
+---
+title: "Flight Price Prediction"
+knit: (function(input_file, encoding) {
+    out_dir <- 'docs';
+    rmarkdown::render(input_file,
+      encoding=encoding,
+      output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+subtitle: Linear and Logistic Regression, Random Forest, K-NN Models
+date: "19/04/2022"
+output: html_document
+---
+# Project Description:
+
+The topic of our research project is centered around flight options details. We're interested in analyzing how different variables affect the price of a flight option, which eventually affects the customer's decision when looking for a ticket. We're going to implement different models that describe and predict the prices of the flight tickets.
+
+# Motivation:
+
+From our own experience, we can say that the prices of airline tickets often seem a bit arbitrary. Should you wait to book or are you already too late? When is the moment for a bargain? What downsides do you have to accept for a cheap ticket? Well, the factors influencing the price are not really explained transparently. Therefore, there was a certain excitement to see through this system a bit, or at least to get to know it better.
+
+# Research Questions:
+
+Before we worked more closely with the data set, we asked ourselves whether we could answer the following questions:
+
+* Is it possible to predict the price of flight tickets based on various predictor variables?
+* What model performs best in doing so based on out-of-sample cross validation with a randomly sampled test data set?
+* Which factors/variables have the most predictive power across models?
+* Which model fits the data best based on the Adjusted R-squared?
+* What lessons can we learn for consumers that want to buy tickets for the lowest price possible?
+
+# Dataset Description:
+
+The following dataset was downloaded from Kaggle and originally scraped from the ‘Easemytrip’ platform for booking flight tickets. It contains information on prices of flights that are operated by six airlines, departing from India's greatest cities - at different times. The names of the variables are quite self-explanatory: the original dataset contained, besides the price (originally in Indian Rupees, we converted it into EUR), the airline and the index, the flight number (which we didn’t use), origin and destination city (6 main Indian cities), departure and arrival time, flight duration, number of stopovers, class and days left (from offer to departure day). There are 300,153 observations and 12 variables in this dataset.
+
+# Project Research:
+
+## Loading the data:
+```{r}
+flightdata <- read.csv("flightprice.csv")
+```
+
+## Seed & Libraries:
+```{r, results=FALSE}
+set.seed(1)
+library("corrplot")
+library("caret")
+library("randomForest")
+library("psych")
+```
+
+## Data Inspection:
+```{r}
+any(is.na(flightdata))
+```
+The `is.na` command helps us determine whether our dataset contains any missing values, which is not the case here. 
+
+```{r}
+head(flightdata)
+```
+With the help of the `head()` command, we can analyze the top rows of the dataset.
+
+```{r}
+str(flightdata)
+summary(flightdata)
+```
+Judging by the structure and summary, we can observe that all of our categorical variables were loaded as character variables, which means that the data needs further pre-processing.
+
+## Data Pre-processing:
+```{r}
+flightdata <- flightdata[sample(nrow(flightdata), 10000), ] 
+flightdata <- flightdata[, -c(1,3)]
+flightdata$airline <- as.factor(flightdata$airline)
+flightdata$source_city <- as.factor(flightdata$source_city)
+flightdata$departure_time <- as.factor(flightdata$departure_time)
+flightdata$stops <- as.factor(flightdata$stops)
+flightdata$arrival_time <- as.factor(flightdata$arrival_time)
+flightdata$destination_city <- as.factor(flightdata$destination_city)
+flightdata$class <- as.factor(flightdata$class)
+flightdata$price <- flightdata$price / 83.89
+head(flightdata)
+```
+
+* Firstly, we have randomly subsetted the data to 10,000 rows, because of limited computational power. 
+* Next, we have factored all of the categorical variables that had 'chr' as datatype. 
+* Lastly, we divided the price category by the currency exchange to get prices in EUR (as of 01/04/22), for easier interpretation.
+
+## Descriptive Analysis & Visual Interpretation:
+```{r}
+plot(flightdata$duration, flightdata$price,  col=flightdata$class, ylab = "Price, EUR", xlab = "Duration of Trip, h")
+legend('topright', legend = levels(flightdata$class), col = 1:2, cex = 1, pch = 1)
+```
+We have plotted the prices of the tickets over duration of flights in hours. Based on this scatter plot, we can observe no correlation between the two variables. Yet, we can clearly observe two clusters, where the black-dotted observations are "Business" class flights, and red-dotted are "Economy". While there may be no difference in duration of trips between the two clusters, the "Business" class tickets are on average more expensive than "Economy" ones.
+
+```{r}
+plot(price ~ departure_time, col = 2:6, data = flightdata, xlab = "Departure Time", ylab = "Price")
+```
+Judging by this boxplot, we cannot derive any conclusions whether the tickets are more expensive during different times of flight. However, we may see that the median for 'Late Night' tickets is highly lower in comparison to the rest, and that the Night category has the highest upper quartile.
+
+```{r}
+plot(price ~ airline, col = 2:7, ylab = "Price", xlab = "Airline", data = flightdata)
+```
+Here we plotted the prices by each airline. We can see that "Air India" and "Vistara"'s prices are are higher on average in comparison to the other airlines.
+
+```{r}
+plot(price ~ source_city, col = 2:7, ylab = "Price", xlab = "Source City", data = flightdata)
+```
+In the following boxplot, we cannot spot any major difference in prices between the different cities where planes are commencing their flights.
+
+```{r}
+plot(price ~ class, col = 2:3, ylab = "Price", xlab = "Class", data = flightdata)
+```
+In this boxplot, we can observe a clear difference in prices between the flight tickets of the "Economy" and "Business" classes. "Business" class tickets have a higher cost, with a median of nearly 620 EUR, while the "Economy" class has a median of 150 EUR. In both instances we can observe a large number of outliers.
+
+```{r}
+corr.data <- cor(flightdata[,8:10])
+corrplot(corr.data, method="circle")
+```
+Here we have graphed the correlation plot between the three numeric variables, mainly "price", "days_left" and "duration". We can observe that there is a positive correlation (~ 0.3) between the price and duration of the flight, which may mean that longer distance flights are more expensive. The "days_left" variable, which relates to the number of days between the booking and flight date, has a negative correlation with "price" (~ -0.2), which may mean that if the customer purchases a ticket which is closer to the flight date, it will be more expensive.
+
+# Prediction:
+
+## Linear Regression:
+
+Now, we are going to tackle our first question of predicting flight ticket prices. We will start by performing a Multiple Linear Regression, in order to observe the effects of various variables upon ticket prices. We are going to execute different models and test which one performed best, based on criteria such as the *Adjusted R-Squared* and *AIC*. In all of our regression models, we will use a 95% confidence level to identify significant variables, and conclude whether there is enough evidence to reject the null hypothesis $H_0$:
+
+* $H_0$: The variables do not have an effect over price.
+* $H_1$: The variables do have an effect over price.
+
+### Full Model:
+```{r}
+regAll <- lm(price ~ (relevel(as.factor(flightdata$class), ref="Economy")) + airline + source_city + 
+               departure_time + stops + arrival_time + destination_city + duration + days_left, data = flightdata)
+summary(regAll)
+```
+
+In the regression above, we have included all of the variables that could explain the changes in price. We have releveled the "class" variable, so that the "Economy" value would be taken as baseline. The fitted regression line for the model is:
+$$
+\widehat{Price} = 99.14165 + 535.58397 \cdot classBusiness - 2.09458 \cdot airlineAirAsia + 18.35166 \cdot airlineGO\_First + ... - 1.53358 \cdot days\_left
+$$
+Interpretation:
+
+* We can observe how most of our variables are significant, since the p-values are < 0.05, and the t-values are > |1.96|.
+* $\beta_0 = 99.14165$, the intercept, is the average value of ticket price at the baseline, when all the other variables are equal to 0. Since most of our variables are categorical, the regression has taken some values as the baseline. If we go from the baseline to our values, the price of the ticket will either increase or decrease by the $\beta_i$ coefficients.
+* As an example for one of the betas: $\beta_1 = 535.58397$, the slope for "Business" class, is the marginal effect of the upper class ticket on price, keeping all things constant. If one wants to purchase a business class ticket instead of the economy one, the price will increase on average by 535.58 EUR, ceteris paribus.
+* The $R^2$ value is 0.9136, which means that the model explains 91.36% of the variability in price.
+
+### Adjusted Model:
+
+Now, we will proceed with an adjusted model, where we are going to select the variables that we think might explain prices the best.
+
+```{r}
+regAdj <- lm(price ~ (relevel(as.factor(flightdata$class), ref="Economy")) + stops + duration + destination_city + 
+               days_left, data = flightdata)
+summary(regAdj)
+```
+
+We have included the following variables:
+
+* Class - releveled by "Economy", since it is known that there is a discrepancy in ticket prices between "Economy" and "Business" class tickets.
+* Stops - If a flight has more stops, it may mean that the trip duration is longer.
+* Duration - If a flight has longer hours, it can highly influence price.
+* Destination City - Flying to specific cities during holidays or when the demand is high for the destination may mean that tickets are more expensive.
+* Days Left - If a person buys a ticket in advance, they're more likely to buy a cheaper ticket, compared to a couple days before the flight.
+
+We can observe that this model performs worse than the model above, since the *Adjusted R-Squared* value is 0.9048, as opposed to the previous value of 0.9134.
+
+### Forward Stepwise:
+
+Now, we will perform a forward stepwise regression, where we start with the model that contains an intercept but no predictors. Next, we add to the null model the variables that result in the lowest AIC, and conclude which model performs better. Stepwise output is hidden.
+```{r, output=FALSE, results=FALSE}
+startmodel = lm(price ~ 1, data = flightdata)
+regStep = step(startmodel, direction="forward", scope = formula(regAll))
+```
+
+```{r}
+summary(regStep)
+```
+
+```{r}
+AIC(regAll, regStep)
+```
+The `stepwise()` model includes all of the variables that we've had in the complete model. Albeit a rare occasion, this may mean that each of our variables in the dataset has a great effect on price, hence the function decided that it's best to include them all. Therefore, the *AIC* and *Adjusted R-Squared* values haven't changed. 
+
+```{r}
+AIC(regStep, regAdj)
+```
+However, in comparison to our adjusted model, the stepwise model performs far better, since the AIC value is lower.
+
+## Out-of-sample Performance:
+
+Now, we will test the predictive power of the models, by segmenting the data into a training and test data. Firstly, we will estimate the models on the training sample, after which we will evaluate their performances on the test sample.
+
+### Segmentation:
+```{r}
+random = sample(1:nrow(flightdata), 0.8*nrow(flightdata))
+train_data = flightdata[random,]
+test_data = flightdata[-random,]
+```
+We're going to split the data into 80% for the training data and 20% for the test data.
+
+### Regressions:
+```{r, output=FALSE, results=FALSE}
+fullmodel = lm(price ~ class + airline + source_city + departure_time + stops + arrival_time + 
+                 destination_city + duration + days_left, data = train_data)
+
+adjmodel = lm(price ~ + stops + duration + destination_city + class + days_left, data=train_data)
+
+startmodel1 = lm(price ~ 1, data=train_data)
+regStep1 = step(startmodel1, direction="forward", scope=formula(fullmodel))
+```
+Re-executing the regressions, but now on the training data. Stepwise output hidden.
+
+### Prediction errors:
+```{r}
+y_hat_full = predict(fullmodel, newdata = test_data)
+y_hat_adjmodel = predict(adjmodel, newdata = test_data)
+y_hat_regstep = predict(regStep1, newdata = test_data)
+```
+Computing the prediction errors on the test data. They will be used for calculating the Root Mean Squared Error (RMSE).
+
+### RMSE:
+```{r}
+sqrt(mean((y_hat_full - test_data$price)^2)) # Full model.
+sqrt(mean((y_hat_adjmodel - test_data$price)^2)) # Adjusted model.
+sqrt(mean((y_hat_regstep - test_data$price)^2)) # Forward selected model.
+```
+We can observe that the lowest RMSE is achieved by both the full model & stepwise models. The in-sample performance showed the exact same results as the out-of-sample performance. We may now proceed with the Random Forests exercise.
+
+## Random Forests:
+
+We also decided to use random forests to predict the flight prices. Since there are 9 predictors, we could have set the hyper parameter mtry=3. However, we noticed that increasing it to 4 yielded significantly better results (lower RMSE) without increasing too much computation time.
+
+```{r, output=FALSE, results=FALSE}
+rf <- randomForest(price ~ ., data=flightdata, importance=TRUE, mtry=4)
+```
+
+```{r}
+rf
+varImpPlot(rf)
+```
+Above we can see that proportion of variance explained is higher than the ones we had in the linear regression models. We may also visualize the importance of the variables.
+
+## Model Comparisons:
+In order to be able to evaluate which model performed better between random forests and linear regression, we use 10-fold cross validation to compute the metrics of performance.
+
+```{r}
+fitControl <- trainControl(method = "cv",number = 10)
+rfFit1 <- train(price ~ .,
+data = flightdata,
+method = "rf",
+tuneGrid = data.frame(mtry=4),
+trControl = fitControl)
+rfFit1
+```
+We may also check the variables that are most important in determining prices on the model built with the train function.
+```{r}
+varImp(rfFit1)
+```
+On the table shown above, we confirm that the three most important variables are: class, whether the airline is Vistara or not, and the duration of the flight.
+
+We can see that the model has a Pseudo R-squared of 95.58% and a RMSE of 65.11. Now, we can proceed to test the performance of the linear model also by using 10-fold cross validation.
+```{r}
+lmFit1 <- train(price ~ .,
+data = flightdata,
+method = "lm",
+trControl = fitControl)
+lmFit1
+```
+## Prediction Summary:
+Comparing the random forest model to the linear regression, both using 10-fold cross validation, we conclude that random forests is a better model. The three performance measures are significantly better on random forests than on the linear regression model.
+
+# Classification:
+In order to find out whether a flight can be seen as affordable by the every-day Indian, we create a new column in the dataset which we derive from the price column.
+Our assumption is that everything below or equal to the median weekly wage is affordable.
+
+By conducting some research we found that the current median weekly wage in India is 90€, hence we used this to classify the flights as affordable (TRUE or FALSE), thus obtaining a boolean variable.
+
+We can then use this variable to train our models with, and finally predict whether a certain flight ticket will be affordable or not given its route, flight time, airline etc. And affordable will mean for half of India's wage earners (from definition of median half will be above the median wage), which is quite a large amount of people and hence a big market.
+
+To this end, let's test the logistic regression and k-NN models.
+
+## Logistic Regression:
+
+First, we set up the categorical "affordable" variable to be predicted and remove the "prices" variable, because we don't want to use them to predict the affordable variable.
+```{r}
+med_weekly_salary = 90 # In Euro for median Indian person.
+
+bool = flightdata$price<=med_weekly_salary 
+# New column with TRUE/FALSE.
+flightdata$affordable = bool
+flightdata$affordable = as.factor(flightdata$affordable)
+flightdata = flightdata[,-10] # Remove prices.
+head(flightdata)
+```
+
+Now we'll build the logistic model. Then we will try to remove some of the predictor variables with `step()`. But as we have seen in the linear regression, all variables are retained here. Moreover, we try the "backward" and "both" (backward and forward) options, yet as we can see, it yields the same model.
+
+```{r, output=FALSE, results=FALSE}
+fit_logit_all <- glm(affordable ~ . , data = flightdata,family = binomial())
+fit_logit_step <- step(fit_logit_all, direction = "both")
+fit_logit_step_b <- step(fit_logit_all, direction = "backward")
+```
+
+Below, we see that the three models are the same:
+```{r}
+formula(fit_logit_step)==formula(fit_logit_step_b)
+formula(fit_logit_step)==formula(fit_logit_all)
+```
+
+```{r}
+summary(fit_logit_step)
+```
+We see that the stepwise logistic regression model achieves an AIC of 4617.4.
+
+### Out-of-sample Performance:
+
+Now, let's see how this model performs in predicting classes. For that we again make an 80%-20% random split of the data into test and train.
+
+```{r}
+random = sample(1:nrow(flightdata), 0.8*nrow(flightdata))
+train_data = flightdata[random,]
+test_data = flightdata[-random,]
+```
+Now, we'll use the caret package to train the model that we obtained from the stepwise algorithm. Then we predict whether the test data flights will be affordable or not and check our predictions with the `confusionMatrix` function.
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5) # Cross Validation.
+logitFit <- train(formula(fit_logit_step), # We use the variables that we obtained from the stepwise algorithm.
+                  data = train_data, 
+                  method = "glm", 
+                  trControl = fitControl)
+
+# Result:
+confusionMatrix(predict(logitFit, test_data), test_data$affordable, positive = "TRUE")
+```
+Here we can see that the model performs reasonably well with an Accuracy of 91% meaning that around 91% of the model's predictions are correct. There are around 30% more False Positives than False Negatives, so this might suggest a small bias of the model but it can also just be by chance.
+
+## k-NN:
+
+In implementing the k-NN classification, we are going to predict the categorical variable affordable using all the other variables within the data set.
+
+### Data Pre-processing:
+
+We make a copy of our data set to prepare it for our k-NN classification. Next we derive the outcome variable, from the price data. Because k-NN involves calculating distances between data points, we must use numeric variables only. First, we scale the data in case our features are on different metrics.
+
+Determining which values are numerical:
+```{r}
+str(flightdata)
+```
+
+We scale the already numeric variables first:
+```{r}
+flightdata[,c("duration", "days_left")]<- scale(flightdata[,c("duration", "days_left")])
+```
+
+Then we proceed to dummy code variables that have three or more levels:
+```{r}
+airline         <-as.data.frame(dummy.code(flightdata$airline))
+source_city     <-as.data.frame(dummy.code(flightdata$source_city))
+departure_time  <-as.data.frame(dummy.code(flightdata$departure_time))
+stops           <-as.data.frame(dummy.code(flightdata$stops))
+arrival_time    <-as.data.frame(dummy.code(flightdata$arrival_time))
+destination_city<-as.data.frame(dummy.code(flightdata$destination_city))
+```
+
+We combine the new dummy variables with the original data set:
+```{r}
+flightdata <- cbind(flightdata, airline, source_city,departure_time ,stops ,arrival_time ,destination_city)
+```
+
+We remove the original variables that had to be dummy coded as well as the outcome variable.
+```{r}
+flightdata <- flightdata[,-(1:7)]
+outcome<-as.data.frame(flightdata[,3])
+flightdata <- flightdata[,-3]
+```
+
+### Building the Model:
+
+We split the data into training and test sets. We partition 80% of the data into the training set and the remaining 20% into the test set.
+```{r}
+# 80% of the sample size:
+smp_size <- floor(0.8 * nrow(flightdata))
+
+train_ind <- sample(seq_len(nrow(flightdata)), size = smp_size)
+
+# Creating test and training sets that contain all of the predictors.
+class_pred_train <- flightdata[train_ind, ]
+class_pred_test <- flightdata[-train_ind, ]
+```
+
+Split outcome variable into training and test sets using the same partition as above.
+
+```{r}
+outcome_train <- outcome[train_ind, ]
+outcome_train<-factor(outcome_train)
+outcome_test <- outcome[-train_ind, ]
+outcome_test <- data.frame(outcome_test)
+```
+
+We use the caret package to run the k-NN classification. We can make use of the function which picks the optimal number of neighbors for us:
+```{r}
+pred_caret <- caret::train(class_pred_train, outcome_train, method = "knn", preProcess = c("center","scale"))
+```
+
+Looking at the output of the k-NN model, we can see that it chose k = 9:
+```{r}
+pred_caret
+```
+
+We can visualize the accuracy for different number of neighbors:
+```{r}
+plot(pred_caret)
+```
+
+Next, we compare our predicted values of the affordability of the price to our actual values. The confusion matrix gives an indication of how well our model predicted the actual values.
+
+The confusion matrix output also shows overall model statistics:
+```{r}
+knnPredict <- predict(pred_caret, newdata = class_pred_test) 
+outcome_test$outcome_test<- factor(outcome_test$outcome_test)
+
+confusionMatrix(knnPredict, outcome_test$outcome_test)
+```
+The model did not perform very well, it only successfully classified 71% of the cases correctly. The success of the model can also be evaluated with a variety of other metrics (sensitivity, specificity, etc.) included here.
+
+### Classification Summary:
+To summarize, we utilized the caret package to perform k-NN classification, predicting the affordability of a flight. This model may not have yielded the accuracy of the logistic model for a number of reasons. The majority of our predictor variables were dummy-coded categorical variables, which are not necessarily the most suited for binary k-NN classification problems.
+
+# Summary:
+Based on various measures and results, we have seen that when predicting a quantitative response, the **Random Forests** model performed better than the Linear Regression model. According to all of the measures (accuracy, recall, precision) in the classification task, the **Logistic Regression** has performed better than the k-NN model.
+
+What we may conclude from this research, is that customers from India (and not only), should consider purchasing a ticket as early as possible; choose a flight that operates late at night, and look for airline offers other than those provided by 'Air India' or 'Vistara'.

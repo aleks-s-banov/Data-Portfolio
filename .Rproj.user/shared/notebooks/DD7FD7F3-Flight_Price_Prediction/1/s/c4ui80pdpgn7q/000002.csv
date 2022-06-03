@@ -1,0 +1,9 @@
+"0","```r
+fitControl <- trainControl(method = \"cv\",number = 10)
+rfFit1 <- train(price ~ .,
+data = flightdata,
+method = \"rf\",
+tuneGrid = data.frame(mtry=4),
+trControl = fitControl)
+rfFit1
+```"

@@ -1,0 +1,6 @@
+"0","```r
+outcome_train <- outcome[train_ind, ]
+outcome_train<-factor(outcome_train)
+outcome_test <- outcome[-train_ind, ]
+outcome_test <- data.frame(outcome_test)
+```"

@@ -1,0 +1,10 @@
+"0","```r
+fitControl <- trainControl(method = \"cv\", number = 5) # Cross Validation.
+logitFit <- train(formula(fit_logit_step), # We use the variables that we obtained from the stepwise algorithm.
+                  data = train_data, 
+                  method = \"glm\", 
+                  trControl = fitControl)
+
+# Result:
+confusionMatrix(predict(logitFit, test_data), test_data$affordable, positive = \"TRUE\")
+```"

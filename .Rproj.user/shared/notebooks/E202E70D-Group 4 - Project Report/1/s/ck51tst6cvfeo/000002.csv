@@ -1,0 +1,4 @@
+"0","```r
+plot(flightdata$duration, flightdata$price,  col=flightdata$class, ylab = \"Price, EUR\", xlab = \"Duration of Trip, h\")
+legend('topright', legend = levels(flightdata$class), col = 1:2, cex = 1, pch = 1)
+```"

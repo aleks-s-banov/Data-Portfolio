@@ -1,0 +1,5 @@
+"0","```r
+y_hat_full = predict(fullmodel, newdata = test_data)
+y_hat_adjmodel = predict(adjmodel, newdata = test_data)
+y_hat_regstep = predict(regStep1, newdata = test_data)
+```"

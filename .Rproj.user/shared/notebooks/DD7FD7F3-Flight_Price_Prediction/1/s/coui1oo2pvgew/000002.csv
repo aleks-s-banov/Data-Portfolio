@@ -1,0 +1,10 @@
+"0","```r
+# 80% of the sample size:
+smp_size <- floor(0.8 * nrow(flightdata))
+
+train_ind <- sample(seq_len(nrow(flightdata)), size = smp_size)
+
+# Creating test and training sets that contain all of the predictors.
+class_pred_train <- flightdata[train_ind, ]
+class_pred_test <- flightdata[-train_ind, ]
+```"

@@ -1,4 +1,0 @@
-"0","```r
-formula(fit_logit_step)==formula(fit_logit_step_b)
-formula(fit_logit_step)==formula(fit_logit_all)
-```"

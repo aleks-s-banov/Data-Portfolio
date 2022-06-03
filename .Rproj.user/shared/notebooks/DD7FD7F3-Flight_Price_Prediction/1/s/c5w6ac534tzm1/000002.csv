@@ -1,3 +1,0 @@
-"0","```r
-flightdata[,c(\"duration\", \"days_left\")]<- scale(flightdata[,c(\"duration\", \"days_left\")])
-```"

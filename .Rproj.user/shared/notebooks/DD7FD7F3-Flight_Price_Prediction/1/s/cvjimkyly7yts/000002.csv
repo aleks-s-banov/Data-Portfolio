@@ -1,4 +1,0 @@
-"0","```r
-str(flightdata)
-summary(flightdata)
-```"

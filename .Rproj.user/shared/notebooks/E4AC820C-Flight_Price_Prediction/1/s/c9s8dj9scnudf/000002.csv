@@ -1,5 +1,0 @@
-"0","```r
-sqrt(mean((y_hat_full - test_data$price)^2)) # Full model.
-sqrt(mean((y_hat_adjmodel - test_data$price)^2)) # Adjusted model.
-sqrt(mean((y_hat_regstep - test_data$price)^2)) # Forward selected model.
-```"

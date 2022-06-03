@@ -1,5 +1,0 @@
-"0","```r
-regAll <- lm(price ~ (relevel(as.factor(flightdata$class), ref=\"Economy\")) + airline + source_city + 
-               departure_time + stops + arrival_time + destination_city + duration + days_left, data = flightdata)
-summary(regAll)
-```"

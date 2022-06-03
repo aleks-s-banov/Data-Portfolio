@@ -1,5 +1,0 @@
-"0","```r
-flightdata <- flightdata[,-(1:7)]
-outcome<-as.data.frame(flightdata[,3])
-flightdata <- flightdata[,-3]
-```"

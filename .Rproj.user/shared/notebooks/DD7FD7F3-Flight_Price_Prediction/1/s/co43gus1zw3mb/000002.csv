@@ -1,4 +1,0 @@
-"0","```r
-corr.data <- cor(flightdata[,8:10])
-corrplot(corr.data, method=\"circle\")
-```"

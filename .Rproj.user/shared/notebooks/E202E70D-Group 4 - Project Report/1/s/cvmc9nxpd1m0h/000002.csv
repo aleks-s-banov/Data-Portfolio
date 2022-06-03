@@ -1,3 +1,0 @@
-"0","```r
-plot(price ~ departure_time, col = 2:6, data = flightdata, xlab = \"Departure Time\", ylab = \"Price\")
-```"

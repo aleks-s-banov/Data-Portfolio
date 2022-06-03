@@ -1,5 +1,0 @@
-"0","```r
-random = sample(1:nrow(flightdata), 0.8*nrow(flightdata))
-train_data = flightdata[random,]
-test_data = flightdata[-random,]
-```"

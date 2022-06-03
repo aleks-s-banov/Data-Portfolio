@@ -1,7 +1,0 @@
-"0","```r
-lmFit1 <- train(price ~ .,
-data = flightdata,
-method = \"lm\",
-trControl = fitControl)
-lmFit1
-```"
